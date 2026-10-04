@@ -1,0 +1,11 @@
+{
+  "name": "Sara",
+  "description": "Sara — Your cute AI study buddy who explains any school or exam topic by talking, looking through your camera, and teaching on a live whiteboard.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

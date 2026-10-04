@@ -1,0 +1,82 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --font-ui: 'Nunito', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-board: 'Caveat', 'Kalam', cursive;
+  }
+
+  body {
+    font-family: var(--font-ui);
+  }
+}
+
+.font-board {
+  font-family: 'Caveat', 'Kalam', cursive;
+}
+
+.font-hindi-hand {
+  font-family: 'Kalam', cursive;
+}
+
+/* Custom smooth scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(203, 213, 225, 0.6);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(148, 163, 184, 0.8);
+}
+
+/* Whiteboard animated line drawing */
+@keyframes drawStroke {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-draw {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: drawStroke 0.8s ease-out forwards;
+}
+
+/* Floating animation for Sara avatar */
+@keyframes cuteFloat {
+  0%, 100% {
+    transform: translateY(0px) rotate(0deg);
+  }
+  50% {
+    transform: translateY(-5px) rotate(1deg);
+  }
+}
+
+.animate-cute-float {
+  animation: cuteFloat 3.5s ease-in-out infinite;
+}
+
+@keyframes sparkleSpin {
+  0% {
+    transform: scale(0) rotate(0deg);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.1) rotate(90deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(0.9) rotate(180deg);
+    opacity: 0;
+  }
+}
+
+.animate-sparkle {
+  animation: sparkleSpin 1.8s ease-in-out infinite;
+}
