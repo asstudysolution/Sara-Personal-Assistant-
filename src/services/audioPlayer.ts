@@ -76,11 +76,34 @@ class SaraAudioPlayer {
   }
 
   /**
-   * Play an AudioBuffer with AnalyserNode for lip-sync
+   * Unlock AudioContext on user touch/tap gesture so autoplay works immediately
    */
-  public playBuffer(buffer: AudioBuffer, onEnded?: () => void): void {
+  public unlockAudioContext(): void {
+    try {
+      const ctx = this.initAudioContext();
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      const buffer = ctx.createBuffer(1, 1, 24000);
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.start(0);
+    } catch (e) {
+      console.warn('unlockAudioContext note:', e);
+    }
+  }
+
+  /**
+   * Play an AudioBuffer with AnalyserNode for lip-sync and report exact duration
+   */
+  public playBuffer(buffer: AudioBuffer, onEnded?: () => void, onStart?: (durationMs: number) => void): void {
     if (this.isMuted) {
-      if (onEnded) onEnded();
+      const simulatedDuration = buffer.duration * 1000;
+      if (onStart) onStart(simulatedDuration);
+      setTimeout(() => {
+        if (onEnded) onEnded();
+      }, simulatedDuration);
       return;
     }
 
@@ -101,6 +124,11 @@ class SaraAudioPlayer {
     this.isPlaying = true;
     this.startAudioLevelTracking();
 
+    const durationMs = buffer.duration * 1000;
+    if (onStart) {
+      onStart(durationMs);
+    }
+
     source.onended = () => {
       this.isPlaying = false;
       this.audioLevel = 0;
@@ -112,63 +140,91 @@ class SaraAudioPlayer {
   }
 
   /**
-   * Speak a text string: tries Gemini TTS first, falls back to Web SpeechSynthesis
+   * Speak a text string: tries Gemini TTS first (with 1 retry), falls back to Web SpeechSynthesis
    */
   public async speakText(
     text: string,
     settings: UserSettings,
     cacheKey?: string,
-    onEnded?: () => void
+    onEnded?: () => void,
+    onStart?: (durationMs: number) => void,
+    isTeaching: boolean = false
   ): Promise<void> {
     if (this.isMuted) {
-      if (onEnded) onEnded();
+      const words = text.trim().split(/\s+/).length;
+      const estimatedMs = Math.max(2200, words * 380);
+      if (onStart) onStart(estimatedMs);
+      setTimeout(() => {
+        if (onEnded) onEnded();
+      }, estimatedMs);
       return;
     }
 
     // 1. Check if already pre-loaded
     if (cacheKey && this.preloadedBuffers.has(cacheKey)) {
       const buffer = this.preloadedBuffers.get(cacheKey)!;
-      this.playBuffer(buffer, onEnded);
+      this.playBuffer(buffer, onEnded, onStart);
       return;
     }
 
-    // 2. Try Gemini TTS
-    try {
-      const { audioBase64 } = await generateGeminiTTS(text, settings);
-      const buffer = await this.decodeAudio(audioBase64);
-      if (cacheKey) {
-        this.preloadedBuffers.set(cacheKey, buffer);
+    // 2. Try Gemini TTS with 1 retry on error (503, 429, timeout)
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const { audioBase64 } = await generateGeminiTTS(text, settings, isTeaching);
+        const buffer = await this.decodeAudio(audioBase64);
+        if (cacheKey) {
+          this.preloadedBuffers.set(cacheKey, buffer);
+        }
+        this.playBuffer(buffer, onEnded, onStart);
+        return;
+      } catch (ttsError) {
+        console.warn(`Gemini TTS attempt ${attempt + 1} failed:`, ttsError);
+        if (attempt === 0) {
+          // Brief pause before retry
+          await new Promise((res) => setTimeout(res, 450));
+        }
       }
-      this.playBuffer(buffer, onEnded);
-      return;
-    } catch (ttsError) {
-      console.warn('Gemini TTS failed or unavailable, falling back to Web SpeechSynthesis:', ttsError);
     }
 
-    // 3. Fallback to Browser SpeechSynthesis with high pitch
-    this.speakWithBrowserFallback(text, onEnded);
+    // 3. Fallback to Browser SpeechSynthesis with high-quality hi-IN voice
+    console.warn('Gemini TTS failed after retry, speaking with browser hi-IN voice');
+    this.speakWithBrowserFallback(text, onEnded, onStart);
   }
 
   /**
    * Pre-load audio for the next step to eliminate latency
    */
-  public async preloadStepAudio(text: string, settings: UserSettings, cacheKey: string): Promise<void> {
+  public async preloadStepAudio(
+    text: string,
+    settings: UserSettings,
+    cacheKey: string,
+    isTeaching: boolean = true
+  ): Promise<void> {
     if (this.preloadedBuffers.has(cacheKey) || !text) return;
     try {
-      const { audioBase64 } = await generateGeminiTTS(text, settings);
+      const { audioBase64 } = await generateGeminiTTS(text, settings, isTeaching);
       const buffer = await this.decodeAudio(audioBase64);
       this.preloadedBuffers.set(cacheKey, buffer);
     } catch {
-      // Silent fail on preload; will fallback when played
+      // Silent fail on preload; will fallback or retry when played
     }
   }
 
   /**
-   * Browser SpeechSynthesis fallback with cute elevated pitch
+   * Browser SpeechSynthesis fallback with sweet pitch and hi-IN pronunciation
    */
-  private speakWithBrowserFallback(text: string, onEnded?: () => void): void {
+  private speakWithBrowserFallback(
+    text: string,
+    onEnded?: () => void,
+    onStart?: (durationMs: number) => void
+  ): void {
     if (!('speechSynthesis' in window)) {
-      if (onEnded) onEnded();
+      const words = text.trim().split(/\s+/).length;
+      const fallbackMs = Math.max(2000, words * 380);
+      if (onStart) onStart(fallbackMs);
+      setTimeout(() => {
+        if (onEnded) onEnded();
+      }, fallbackMs);
       return;
     }
 
@@ -186,15 +242,16 @@ class SaraAudioPlayer {
     }
 
     const utterance = new SpeechSynthesisUtterance(cleanText);
-    utterance.pitch = 1.4; // High pitch for cute anime girl effect
-    utterance.rate = 1.05; // Slightly lively rate
+    utterance.lang = 'hi-IN'; // Force Hindi language pronunciation
+    utterance.pitch = 1.35; // Sweet elevated pitch
+    utterance.rate = 1.0; // Natural rate
 
-    // Choose preferred female or natural voice if available
+    // Look for Hindi voice first
     const voices = window.speechSynthesis.getVoices();
-    const preferredVoice = voices.find(
+    const hindiVoice = voices.find((v) => v.lang.startsWith('hi') || v.lang.includes('IN'));
+    const preferredVoice = hindiVoice || voices.find(
       (v) =>
-        (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Samantha') || v.name.includes('Zira') || v.name.includes('Kavya')) &&
-        (v.lang.startsWith('en') || v.lang.startsWith('hi'))
+        (v.name.includes('Google') || v.name.includes('Natural') || v.name.includes('Lekha') || v.name.includes('Kalpana'))
     ) || voices[0];
 
     if (preferredVoice) {
@@ -203,6 +260,12 @@ class SaraAudioPlayer {
 
     this.isPlaying = true;
     this.startSimulatedAudioLevel();
+
+    const wordCount = cleanText.split(/\s+/).length;
+    const estimatedDuration = Math.max(2200, wordCount * 360);
+    if (onStart) {
+      onStart(estimatedDuration);
+    }
 
     utterance.onend = () => {
       this.isPlaying = false;

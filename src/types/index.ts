@@ -17,7 +17,8 @@ export interface WhiteboardAction {
     | 'underline' 
     | 'clear' 
     | 'graph' 
-    | 'geometry';
+    | 'geometry'
+    | 'point';
   x: number; // 0-100%
   y: number; // 0-100%
   content?: string;
@@ -41,11 +42,15 @@ export interface WhiteboardAction {
     // For math step-by-step:
     steps?: { stepNum: number; expr: string; reason?: string }[];
   };
+  page?: number;
+  isPointing?: boolean;
+  role?: 'heading' | 'main' | 'important' | 'answer' | 'diagram' | 'point';
 }
 
 export interface WhiteboardStep {
   say: string; // What Sara speaks during this step
   board: WhiteboardAction[]; // Actions drawn during this step
+  page?: number; // Page number (1, 2, 3...) for automatic page turns
 }
 
 export interface StructuredLesson {
@@ -103,6 +108,7 @@ export interface ChatMessage {
   whiteboardLesson?: StructuredLesson;
   isStreaming?: boolean;
   error?: string;
+  errorDetails?: string;
 }
 
 export type SaraMood = 'idle' | 'listening' | 'thinking' | 'talking' | 'happy' | 'sleepy';

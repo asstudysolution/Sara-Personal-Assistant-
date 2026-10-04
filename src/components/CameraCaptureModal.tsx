@@ -12,7 +12,6 @@ import {
   Send,
   RefreshCw,
   AlertCircle,
-  Sparkles,
 } from 'lucide-react';
 
 interface CameraCaptureModalProps {
@@ -36,12 +35,10 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState<boolean>(false);
 
-  // Start Camera Stream
   const startCamera = useCallback(async (facing: 'environment' | 'user') => {
     setIsInitializing(true);
     setCameraError(null);
 
-    // Stop existing stream if any
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
     }
@@ -66,10 +63,9 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
       console.error('Camera access error:', err);
       if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
         setCameraError(
-          "Camera access was denied! Please tap the lock icon in your browser address bar to allow Sara access to your camera 📷✨"
+          "कैमरे की अनुमति नहीं मिली! कृपया ब्राउज़र में ऊपर ताले (Lock) वाले निशान पर क्लिक करके अनुमति दें 📷"
         );
       } else if (err.name === 'OverconstrainedError' && facing === 'environment') {
-        // Fallback to any available camera if back camera constraints fail
         try {
           const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
           setStream(fallbackStream);
@@ -78,10 +74,10 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
           }
           return;
         } catch (fbErr: any) {
-          setCameraError(`Could not start camera: ${fbErr.message || String(fbErr)}`);
+          setCameraError(`कैमरा शुरू नहीं हो सका: ${fbErr.message || String(fbErr)}`);
         }
       } else {
-        setCameraError(`Could not start camera: ${err.message || String(err)}`);
+        setCameraError(`कैमरा शुरू नहीं हो सका: ${err.message || String(err)}`);
       }
     } finally {
       setIsInitializing(false);
@@ -118,7 +114,6 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // If front camera, flip horizontally for mirror preview
     if (facingMode === 'user') {
       ctx.translate(canvas.width, 0);
       ctx.scale(-1, 1);
@@ -128,7 +123,6 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
     const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
     setCapturedImage(dataUrl);
 
-    // Stop live stream while reviewing captured image
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
       setStream(null);
@@ -160,7 +154,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
 
   const handleSend = () => {
     if (!capturedImage) return;
-    const prompt = questionText.trim() || 'Please explain what is in this image step-by-step on your whiteboard!';
+    const prompt = questionText.trim() || 'कृपया इस चित्र में दिए गए सवाल या चित्र को व्हाइटबोर्ड पर क्रमबद्ध तरीके से समझाइए!';
     onSendCapture(capturedImage, prompt);
     handleClose();
   };
@@ -189,10 +183,10 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base">
-                Show Sara Your Studies
+                सारा को अपनी पढ़ाई दिखाइए
               </h3>
               <p className="text-xs text-slate-500">
-                Textbooks, math problems, notes or diagrams
+                किताब का पन्ना, गणित का सवाल, या हस्तलिखित नोट्स
               </p>
             </div>
           </div>
@@ -205,17 +199,15 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
           </button>
         </div>
 
-        {/* Camera / Image Viewport */}
+        {/* Viewport */}
         <div className="relative flex-1 min-h-[300px] sm:min-h-[360px] bg-black flex items-center justify-center overflow-hidden">
-          {/* Active Camera Indicator */}
           {!capturedImage && !cameraError && (
-            <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600/90 text-white text-xs font-bold shadow-md animate-pulse">
+            <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-red-600 text-white text-xs font-bold shadow-md animate-pulse">
               <div className="w-2 h-2 rounded-full bg-white" />
-              <span>Camera is on</span>
+              <span>कैमरा चालू है</span>
             </div>
           )}
 
-          {/* Error Screen */}
           {cameraError ? (
             <div className="p-6 text-center text-white max-w-sm">
               <AlertCircle className="w-12 h-12 text-pink-400 mx-auto mb-3" />
@@ -225,15 +217,14 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
                 className="px-4 py-2 rounded-xl bg-pink-500 hover:bg-pink-600 text-white font-bold text-xs shadow-md transition-all inline-flex items-center gap-2"
               >
                 <Upload className="w-4 h-4" />
-                Upload Photo from Gallery Instead
+                गैलरी से फोटो अपलोड करें
               </button>
             </div>
           ) : capturedImage ? (
-            /* Captured Review View */
             <div className="relative w-full h-full flex items-center justify-center">
               <img
                 src={capturedImage}
-                alt="Captured study problem"
+                alt="Captured question"
                 className="max-h-[380px] w-auto object-contain"
               />
               <button
@@ -241,11 +232,10 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
                 className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-black/60 hover:bg-black/80 text-white text-xs font-semibold backdrop-blur-xs transition-colors"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
-                Retake
+                दोबारा लें
               </button>
             </div>
           ) : (
-            /* Live Camera Stream */
             <div className="relative w-full h-full flex items-center justify-center">
               <video
                 ref={videoRef}
@@ -259,15 +249,14 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
 
               {isInitializing && (
                 <div className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-sm">
-                  Starting camera...
+                  कैमरा शुरू हो रहा है...
                 </div>
               )}
 
-              {/* Flip camera button */}
               <button
                 onClick={handleFlipCamera}
                 className="absolute bottom-4 right-4 p-3 rounded-full bg-black/50 hover:bg-black/70 text-white backdrop-blur-xs transition-colors"
-                title="Switch Camera (Front/Back)"
+                title="कैमरा बदलें (आगे / पीछे)"
               >
                 <RotateCw className="w-5 h-5" />
               </button>
@@ -275,17 +264,16 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
           )}
         </div>
 
-        {/* Bottom Actions & Question Input */}
+        {/* Bottom Actions */}
         <div className="p-3 sm:p-4 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 space-y-3">
           {capturedImage ? (
-            /* Review & Question Prompt */
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <input
                   type="text"
                   value={questionText}
                   onChange={(e) => setQuestionText(e.target.value)}
-                  placeholder="Ask a specific question (e.g. 'Solve step 2', 'Explain this diagram')"
+                  placeholder="अपना सवाल लिखें (जैसे: 'दूसरा चरण हल करें', 'यह चित्र समझाइए')"
                   className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-hidden focus:ring-2 focus:ring-pink-300 dark:text-white"
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') handleSend();
@@ -297,23 +285,21 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
                   className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-pink-500 hover:bg-pink-600 text-white text-sm font-bold shadow-md transition-all shrink-0"
                 >
                   <Send className="w-4 h-4" />
-                  <span>Ask Sara</span>
+                  <span>सारा से पूछें</span>
                 </button>
               </div>
               <p className="text-[11px] text-slate-400 text-center">
-                Sara will examine the image and start teaching on the whiteboard! ✨
+                सारा तस्वीर देखकर तुरंत व्हाइटबोर्ड पर समझाएगी! ✨
               </p>
             </div>
           ) : (
-            /* Camera Control Bar */
             <div className="flex items-center justify-between gap-3">
-              {/* Gallery / File Upload */}
               <button
                 onClick={() => fileInputRef.current?.click()}
                 className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 transition-colors"
               >
                 <Upload className="w-4 h-4 text-pink-500" />
-                <span>Upload from Gallery</span>
+                <span>गैलरी से फोटो</span>
               </button>
 
               <input
@@ -324,19 +310,17 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
                 onChange={handleFileUpload}
               />
 
-              {/* Big Capture Button */}
               <button
                 onClick={handleCapture}
                 disabled={!!cameraError || isInitializing}
                 className="flex items-center justify-center w-14 h-14 rounded-full bg-pink-500 hover:bg-pink-600 active:scale-95 text-white shadow-lg shadow-pink-200 dark:shadow-none transition-all disabled:opacity-50 ring-4 ring-pink-100 dark:ring-pink-900/30"
-                title="Capture & Ask"
+                title="फोटो खींचें"
               >
                 <div className="w-6 h-6 rounded-full border-2 border-white" />
               </button>
 
-              {/* Quick tip */}
               <div className="text-[11px] text-slate-400 text-right max-w-[100px] leading-tight">
-                Align question in the center
+                सवाल को बीच में सीधा रखें
               </div>
             </div>
           )}

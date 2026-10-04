@@ -51,10 +51,10 @@ export const SavedNotesModal: React.FC<SavedNotesModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-slate-800 dark:text-slate-100 text-base">
-                My Revision Notes & Weak Topics
+                रिवीजन नोट्स और कमजोर टॉपिक
               </h3>
               <p className="text-xs text-slate-500">
-                Saved whiteboard lessons & areas to strengthen
+                सहेजे गए व्हाइटबोर्ड पाठ और जिनपर अभ्यास की जरूरत है
               </p>
             </div>
           </div>
@@ -77,7 +77,7 @@ export const SavedNotesModal: React.FC<SavedNotesModalProps> = ({
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
             }`}
           >
-            Whiteboard Lessons ({savedLessons.length})
+            व्हाइटबोर्ड पाठ ({savedLessons.length})
           </button>
           <button
             onClick={() => setActiveTab('weakTopics')}
@@ -87,7 +87,7 @@ export const SavedNotesModal: React.FC<SavedNotesModalProps> = ({
                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-800'
             }`}
           >
-            Weak Exam Topics ({weakTopics.length})
+            कमजोर टॉपिक ({weakTopics.length})
           </button>
         </div>
 
@@ -97,9 +97,9 @@ export const SavedNotesModal: React.FC<SavedNotesModalProps> = ({
             savedLessons.length === 0 ? (
               <div className="py-12 text-center text-slate-400">
                 <Bookmark className="w-10 h-10 mx-auto mb-2 opacity-40" />
-                <p className="text-sm font-semibold">No saved lessons yet!</p>
+                <p className="text-sm font-semibold">अभी कोई पाठ सहेजा नहीं गया है!</p>
                 <p className="text-xs mt-1">
-                  Click the bookmark icon on the whiteboard while Sara is teaching to save lessons here.
+                  व्हाइटबोर्ड पर पढ़ाते समय बुकमार्क आइकन दबाकर पाठ को यहाँ सुरक्षित करें।
                 </p>
               </div>
             ) : (
@@ -113,8 +113,8 @@ export const SavedNotesModal: React.FC<SavedNotesModalProps> = ({
                       {lesson.title}
                     </h4>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      {lesson.steps.length} teaching steps ·{' '}
-                      {lesson.createdAt ? new Date(lesson.createdAt).toLocaleDateString() : 'Recent'}
+                      {lesson.steps.length} चरण ·{' '}
+                      {lesson.createdAt ? new Date(lesson.createdAt).toLocaleDateString('hi-IN') : 'हाल ही में'}
                     </p>
                   </div>
 
@@ -127,13 +127,13 @@ export const SavedNotesModal: React.FC<SavedNotesModalProps> = ({
                       className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-pink-500 hover:bg-pink-600 text-white text-xs font-bold shadow-2xs transition-all"
                     >
                       <Play className="w-3.5 h-3.5" />
-                      <span>Replay</span>
+                      <span>बोर्ड पर चलाएं</span>
                     </button>
                     {lesson.id && (
                       <button
                         onClick={() => onDeleteLesson(lesson.id!)}
                         className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-slate-700 transition-colors"
-                        title="Delete lesson"
+                        title="हटाएं"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
@@ -143,26 +143,25 @@ export const SavedNotesModal: React.FC<SavedNotesModalProps> = ({
               ))
             )
           ) : (
-            /* Weak Topics */
             weakTopics.length === 0 ? (
               <div className="py-12 text-center text-slate-400">
                 <BookOpen className="w-10 h-10 mx-auto mb-2 opacity-40 text-emerald-500" />
-                <p className="text-sm font-semibold">No weak topics logged!</p>
+                <p className="text-sm font-semibold">कोई कमजोर विषय दर्ज नहीं है!</p>
                 <p className="text-xs mt-1">
-                  When you take tests in Exam Practice mode, questions you miss will appear here for targeted revision.
+                  जब आप प्रैक्टिस परीक्षा में कोई सवाल गलत करेंगे, तो वह टॉपिक यहाँ स्वतः जुड़ जाएगा।
                 </p>
               </div>
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center justify-between px-1">
                   <span className="text-xs font-bold text-slate-600 dark:text-slate-400">
-                    Topics Needing Extra Attention:
+                    इन विषयों पर अधिक ध्यान देने की आवश्यकता है:
                   </span>
                   <button
                     onClick={onClearWeakTopics}
                     className="text-[11px] text-rose-600 hover:underline"
                   >
-                    Clear All
+                    सभी हटाएं
                   </button>
                 </div>
 
@@ -186,7 +185,7 @@ export const SavedNotesModal: React.FC<SavedNotesModalProps> = ({
                       className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-pink-500 hover:bg-pink-600 text-white text-xs font-bold shadow-2xs transition-all shrink-0"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
-                      <span>Revise on Board</span>
+                      <span>बोर्ड पर समझें</span>
                     </button>
                   </div>
                 ))}

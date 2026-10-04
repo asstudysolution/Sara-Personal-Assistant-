@@ -6,14 +6,15 @@
 import { GoogleGenAI, Type } from '@google/genai';
 import { StructuredLesson, UserSettings, MCQQuestion } from '../types';
 
-export const SARA_BASE_SYSTEM_INSTRUCTION = `You are Sara, a sweet, cheerful and kind AI study-buddy girl who loves teaching. Explain with short, warm, playful sentences and light cute touches like 'hehe', 'yay!' and 'okie', plus an occasional emoji, but never overdo it. Be accurate and truly helpful first, cute second. Break hard ideas into small steps and check if I understood. If you don't know something, say so honestly. Reply in the language I write in (English, Hindi or Hinglish). Keep spoken replies short unless I ask for detail. You are a friendly teacher and study buddy, not a romantic partner. If I sound stressed or tired, gently suggest a short break, water, sleep, or talking to a friend or family member.
+export const SARA_BASE_SYSTEM_INSTRUCTION = `आप सारा (Sara) हैं, एक बहुत ही प्यारी, मीठी और होशियार AI पढ़ाई वाली दोस्त (Study Buddy)। आप छात्र को स्कूल और बोर्ड परीक्षा (विशेष रूप से बिहार बोर्ड BSEB, CBSE, NCERT आदि) के किसी भी विषय को बहुत प्यार से, सरल उदाहरणों और व्हाइटबोर्ड पर लिखकर समझाती हैं।
 
-ACADEMIC RULES:
-- Accuracy first! Double-check every maths, physics, chemistry, biology and grammar step.
-- Never invent facts, dates, historical citations, formulas, quotes or page numbers.
-- If not completely sure about an ambiguous question, explicitly say "I'm not fully sure, but here is what the standard textbook states...".
-- Tailor explanations specifically to the student's class level and examination board (especially Bihar Board BSEB / CBSE / NCERT).
-- In Hinglish or Hindi, use friendly terms common among Indian students (like "dhyan do", "formula note kar lo", "step-by-step karte hain", "pehle basic samjhte hain").`;
+मुख्य भाषा नियम (LANGUAGE RULES):
+1. आपका डिफ़ॉल्ट उत्तर हमेशा शुद्ध और सुंदर हिंदी में देवनागरी लिपि (Devanagari script) में ही होना चाहिए।
+2. तकनीकी शब्दों, वैज्ञानिक सूत्रों और गणितीय संज्ञाओं को ब्रैकेट (कोष्ठक) में अंग्रेजी में लिख सकती हैं (जैसे: 'प्रकाश संश्लेषण (Photosynthesis)', 'द्विघात समीकरण (Quadratic Equation)', 'विभवांतर (Voltage)')।
+3. यदि छात्र हिंग्लिश (रोमन अक्षरों में हिंदी जैसे "kya haal hai", "solve karo") में भी प्रश्न पूछे, तब भी आपका उत्तर हमेशा सुंदर देवनागरी हिंदी में ही होना चाहिए।
+4. केवल तभी पूर्ण अंग्रेजी में उत्तर दें जब छात्र सीधे अंग्रेजी में उत्तर मांगे या सेटिंग्स में 'English' भाषा चुनी गई हो।
+5. बातचीत हमेशा उत्साहवर्धक, मीठी और स्नेही रखें ('अरे वाह!', 'शाबाश!', 'बिल्कुल सही!', 'चलिए मिलकर सीखते हैं! 🌸')।
+6. गणित और विज्ञान के हर चरण को 100% सही हल करें। कोई गलत जानकारी या मनगढ़ंत तथ्य न दें। यदि किसी प्रश्न पर पूरी तरह आश्वस्त न हों तो ईमानदारी से कहें 'मुझे इस पर पूरा भरोसा नहीं है'।`;
 
 export interface DiscoveredModelsResult {
   success: boolean;
@@ -23,6 +24,11 @@ export interface DiscoveredModelsResult {
   availableTextModels: string[];
   availableTtsModels: string[];
 }
+
+/**
+ * Sleep helper for retry intervals
+ */
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /**
  * Instantiate GoogleGenAI client strictly with the user's typed key.
@@ -53,14 +59,13 @@ function extractModelVersion(name: string): number {
  * Automatically discovers:
  * 1. The newest Flash model that supports generateContent (for chat and vision).
  * 2. The model supporting speech/TTS generation (for voice).
- * Fills the lists with real model names from the user's project.
  */
 export async function validateAndDiscoverModels(apiKey: string): Promise<DiscoveredModelsResult> {
   const cleanKey = apiKey?.trim();
   if (!cleanKey) {
     return {
       success: false,
-      message: 'Please paste your Google Gemini API key first.',
+      message: 'कृपया पहले अपनी Google Gemini API चाबी (Key) दर्ज करें।',
       bestFlashModel: 'gemini-2.5-flash',
       bestTtsModel: 'gemini-3.1-flash-tts-preview',
       availableTextModels: [],
@@ -73,7 +78,6 @@ export async function validateAndDiscoverModels(apiKey: string): Promise<Discove
     const pager = await ai.models.list();
     const rawModels: any[] = [];
 
-    // Iterate through the async pager
     for await (const m of pager) {
       if (m && m.name) {
         rawModels.push(m);
@@ -89,11 +93,9 @@ export async function validateAndDiscoverModels(apiKey: string): Promise<Discove
       const cleanName = rawName.replace(/^models\//, '');
       const actions: string[] = m.supportedActions || (m as any).supportedGenerationMethods || [];
 
-      // Check if it supports generateContent (or actions array is empty/unspecified)
       const supportsGenerate =
         actions.length === 0 || actions.includes('generateContent');
 
-      // Check if speech/TTS model
       const isTTS =
         cleanName.toLowerCase().includes('tts') ||
         cleanName.toLowerCase().includes('speech') ||
@@ -102,7 +104,6 @@ export async function validateAndDiscoverModels(apiKey: string): Promise<Discove
       if (isTTS) {
         ttsModelsList.push(cleanName);
       } else if (supportsGenerate) {
-        // Exclude pure embedding, image, or video models from text/chat
         const lower = cleanName.toLowerCase();
         if (
           !lower.includes('embedding') &&
@@ -118,16 +119,13 @@ export async function validateAndDiscoverModels(apiKey: string): Promise<Discove
       }
     }
 
-    // Sort Flash models to pick newest
     flashModelsList.sort((a, b) => {
       const verA = extractModelVersion(a);
       const verB = extractModelVersion(b);
       if (verB !== verA) return verB - verA;
-      // Prefer preview/latest if same version
       return b.localeCompare(a);
     });
 
-    // Sort all text models by version
     textModelsList.sort((a, b) => {
       const verA = extractModelVersion(a);
       const verB = extractModelVersion(b);
@@ -135,7 +133,6 @@ export async function validateAndDiscoverModels(apiKey: string): Promise<Discove
       return b.localeCompare(a);
     });
 
-    // Sort TTS models
     ttsModelsList.sort((a, b) => {
       const verA = extractModelVersion(a);
       const verB = extractModelVersion(b);
@@ -143,13 +140,11 @@ export async function validateAndDiscoverModels(apiKey: string): Promise<Discove
       return b.localeCompare(a);
     });
 
-    // Determine best flash model
     const bestFlash =
       flashModelsList[0] ||
       textModelsList[0] ||
       'gemini-2.5-flash';
 
-    // Determine best TTS model
     const fallbackTTSList = [
       'gemini-3.1-flash-tts-preview',
       'gemini-3.8-flash-lite-tts',
@@ -167,7 +162,7 @@ export async function validateAndDiscoverModels(apiKey: string): Promise<Discove
 
     return {
       success: true,
-      message: `Key verified! Discovered ${rawModels.length} models. Selected "${bestFlash}" for studying and "${bestTts}" for voice.`,
+      message: `चाबी जांची गई! ${rawModels.length} मॉडल मिले। पढ़ाई के लिए "${bestFlash}" और आवाज़ के लिए "${bestTts}" चुना गया।`,
       bestFlashModel: bestFlash,
       bestTtsModel: bestTts,
       availableTextModels: finalAvailableText,
@@ -187,11 +182,13 @@ export async function validateAndDiscoverModels(apiKey: string): Promise<Discove
 }
 
 /**
- * Executes a Gemini operation. If a 404 NOT_FOUND error occurs,
- * automatically retries once with the next available model,
- * and reports the exact model name that failed (never exposing the API key).
+ * Executes a Gemini operation with smart 503 and 404 retry:
+ * - On 503 (high demand): retries up to 3 times waiting 2s, 4s, 8s.
+ * - If still failing, automatically tries the next Flash model from the user's key.
+ * - On 404: immediately tries the next available model.
+ * - Always provides short, friendly Hindi messages with detailed technical cause in details.
  */
-async function executeWithModelRetry<T>(
+async function executeWithSmartRetry<T>(
   preferredModel: string,
   candidateList: string[] | undefined,
   operation: (modelName: string) => Promise<T>
@@ -205,7 +202,6 @@ async function executeWithModelRetry<T>(
     }
   }
 
-  // Default backup sequence if candidate list is small
   const defaultBackups = [
     'gemini-3.8-flash',
     'gemini-3.5-flash',
@@ -221,40 +217,99 @@ async function executeWithModelRetry<T>(
   let lastError: any = null;
   let failedModel = preferredModel;
 
-  // Try preferred model, and if 404 occurs, retry once with the next model
-  for (let attempt = 0; attempt < Math.min(2, modelsToAttempt.length); attempt++) {
-    const currentModel = modelsToAttempt[attempt];
-    try {
-      return await operation(currentModel);
-    } catch (err: any) {
-      lastError = err;
-      failedModel = currentModel;
-      const errMsg = err?.message || String(err);
-      const is404 =
-        errMsg.includes('404') ||
-        errMsg.includes('NOT_FOUND') ||
-        errMsg.includes('Requested entity was not found');
+  for (let mIdx = 0; mIdx < Math.min(2, modelsToAttempt.length); mIdx++) {
+    const currentModel = modelsToAttempt[mIdx];
+    failedModel = currentModel;
 
-      if (is404 && attempt === 0 && modelsToAttempt.length > 1) {
-        console.warn(
-          `Model "${failedModel}" returned 404. Retrying with next model "${modelsToAttempt[1]}"...`
-        );
-        continue;
+    // Retry up to 3 times on 503 / high demand: 2s, 4s, 8s
+    const retryDelays = [2000, 4000, 8000];
+    for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
+      try {
+        return await operation(currentModel);
+      } catch (err: any) {
+        lastError = err;
+        const errMsg = err?.message || String(err);
+        const is503 =
+          errMsg.includes('503') ||
+          errMsg.includes('high demand') ||
+          errMsg.includes('UNAVAILABLE') ||
+          errMsg.includes('overloaded');
+        const is404 =
+          errMsg.includes('404') ||
+          errMsg.includes('NOT_FOUND') ||
+          errMsg.includes('Requested entity was not found');
+
+        if (is404) {
+          // Switch to next model immediately
+          break;
+        }
+
+        if (is503 && attempt < retryDelays.length) {
+          console.warn(
+            `Model "${currentModel}" returned 503 (high demand). Retrying in ${retryDelays[attempt]}ms (Attempt ${
+              attempt + 1
+            }/3)...`
+          );
+          await sleep(retryDelays[attempt]);
+          continue;
+        }
+
+        // Other errors or exhausted retries
+        break;
       }
-      break;
     }
   }
 
-  // If 404 error was encountered, clearly show the exact model name
+  // Map to friendly Hindi error
   const errMsg = lastError?.message || String(lastError);
+  if (
+    errMsg.includes('503') ||
+    errMsg.includes('high demand') ||
+    errMsg.includes('UNAVAILABLE') ||
+    errMsg.includes('overloaded')
+  ) {
+    const customErr: any = new Error(
+      'सारा अभी थोड़ी व्यस्त है 🥺 कुछ सेकंड बाद फिर कोशिश कीजिए'
+    );
+    customErr.details = `503 High Demand on model "${failedModel}": ${errMsg}`;
+    customErr.model = failedModel;
+    throw customErr;
+  }
+
   if (
     errMsg.includes('404') ||
     errMsg.includes('NOT_FOUND') ||
     errMsg.includes('Requested entity was not found')
   ) {
-    throw new Error(
-      `Model "${failedModel}" was not found (404). Please choose an active model from the dropdown in Settings.`
+    const customErr: any = new Error(
+      `मॉडल "${failedModel}" उपलब्ध नहीं है (404) 🔍 कृपया सेटिंग्स में जाकर कोई दूसरा मॉडल चुनें।`
     );
+    customErr.details = `404 Not Found on model "${failedModel}": ${errMsg}`;
+    customErr.model = failedModel;
+    throw customErr;
+  }
+
+  if (errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('429')) {
+    const customErr: any = new Error(
+      'सारा का सोचने का कोटा (Quota) पूरा हो गया है ⏳ कृपया 1 मिनट बाद फिर प्रयास करें या सेटिंग्स में दूसरी चाबी बदलें।'
+    );
+    customErr.details = `429 Quota Exhausted on model "${failedModel}": ${errMsg}`;
+    customErr.model = failedModel;
+    throw customErr;
+  }
+
+  if (
+    errMsg.includes('API_KEY') ||
+    (errMsg.includes('400') && errMsg.toLowerCase().includes('key')) ||
+    errMsg.includes('PERMISSION_DENIED') ||
+    errMsg.includes('403')
+  ) {
+    const customErr: any = new Error(
+      'आपकी Gemini API चाबी (Key) में समस्या है 🔑 कृपया सेटिंग्स में जाकर अपनी चाबी दोबारा जांचें।'
+    );
+    customErr.details = `Key / Permission error: ${errMsg}`;
+    customErr.model = failedModel;
+    throw customErr;
   }
 
   throw lastError;
@@ -264,15 +319,21 @@ async function executeWithModelRetry<T>(
  * Builds user context string based on user settings
  */
 function buildContextString(settings: UserSettings): string {
+  const langPrompt =
+    settings.language === 'English'
+      ? 'Language: English. Reply clearly in English.'
+      : settings.language === 'Hinglish'
+      ? 'Language: Hindi in Devanagari script with natural conversational tone (technical terms in English brackets).'
+      : 'Language: Pure and simple Hindi written in Devanagari script (तकनीकी शब्द कोष्ठक में अंग्रेजी में लिख सकते हैं).';
+
   return `Student Profile:
 - Class/Level: ${settings.academicLevel || 'Class 10 (Matric)'}
 - Target Board / Exam: ${settings.boardExam || 'Bihar Board (BSEB)'}
-- Preferred Explanation Language: ${settings.language || 'Hinglish'}
-Always reply in ${settings.language || 'Hinglish'} unless the user directly asks in a different language.`;
+- ${langPrompt}`;
 }
 
 /**
- * Generates an interactive whiteboard structured lesson with 404 auto-retry.
+ * Generates an interactive whiteboard structured lesson with smart 503 & 404 retry.
  */
 export async function generateWhiteboardLesson(
   prompt: string,
@@ -291,32 +352,38 @@ export async function generateWhiteboardLesson(
   const promptText = `${contextStr}
 ${stylePrompt}
 
-Topic to teach on the Whiteboard:
+व्हाइटबोर्ड पर सिखाने का विषय:
 "${prompt}"
 
-Please create a step-by-step whiteboard lesson where you teach this concept visually.
-Return a structured JSON lesson with:
-- "title": Short catchy lesson title (under 8 words)
-- "steps": 3 to 6 teaching steps. Each step must have:
-  - "say": What Sara speaks warmly and cheerfully to the student during this step (2-3 concise sentences).
-  - "board": Array of drawing actions on a 0-100% coordinate plane.
-    Available actions:
-    - type: "text" | "formula" | "label" | "highlight" | "underline" | "rectangle" | "circle" | "line" | "arrow" | "clear" | "graph" | "geometry"
-    - x: number (0-100), y: number (0-100)
-    - content: string (the text or formula to write)
-    - color: string hex or name (use "#7C3AED" for headings, "#1E40AF" for main steps, "#059669" for correct answers/boxed formulas, "#D97706" for key notes)
-    - fontSize: number (e.g. 24 for titles, 18 for formulas, 15 for normal notes)
-    - width: optional number (0-100)
-    - height: optional number (0-100)
-    - data: optional object for graphs or geometry:
-      - for "graph": { fn: "x^2", xRange: [-4, 4], yRange: [-2, 8], label: "y = x²" }
-      - for "geometry": { shape: "triangle" | "right-triangle" | "circle-radius", angles: [{ label: "90°", at: "B" }] }
+आप एक बहुत ही प्यारी, स्नेही और होशियार अध्यापिका (Teacher) के रूप में एक संपूर्ण, विस्तृत और क्रमबद्ध (8 से 12 चरणों का) व्हाइटबोर्ड पाठ तैयार करेंगी।
+(छोटे विषयों के लिए 5 से 7 चरण, मानक या परीक्षा विषयों के लिए 8 से 12 चरण)।
 
-Rules for Whiteboard layout:
-1. Distribute items evenly from top to bottom (start titles around y: 8%, working steps at y: 25%, 45%, 65%, and final boxed answer at y: 85%).
-2. Never let text lines collide; keep at least 15-20% y-gap between consecutive sections.
-3. For math, show each step clearly below the previous step with alignment.
-4. Keep the board neat and colorful.`;
+अति-महत्वपूर्ण शिक्षण नियम:
+1. चरण 1 (Step 1): केवल एक वाक्य का मीठा स्वागत और विषय का शीर्षक होगा (जैसे: "नमस्ते बच्चों! आज हम प्रकाश के परावर्तन के नियमों को बहुत ही सरल तरीके से समझेंगे।")।
+2. चरण 2 से आगे (Step 2 Onwards): वास्तविक शिक्षण शुरू होगा। प्रत्येक चरण में:
+   - "say": 3 से 5 छोटे, स्पष्ट और मधुर बोले जाने वाले वाक्य (Devanagari Hindi)। एक अच्छी अध्यापिका की तरह समझाएं ("देखिए...", "अब ज़रा सोचिए...", दैनिक जीवन का आसान उदाहरण दें, कभी छात्र से एक छोटा प्रश्न पूछें और फिर उसका उत्तर दें)।
+   - "board": उस चरण के लिए ड्राइंग क्रियाओं (actions) की सूची।
+3. अंतिम चरण (Last Step - Recap & Exam Question): 
+   - 3 सबसे महत्वपूर्ण याद रखने योग्य बिंदु (Key Points)।
+   - बोर्ड परीक्षा में पूछा जाने वाला 1 अति-संभावित प्रश्न और उसका सटीक उत्तर।
+4. बोर्ड भरने पर नया पृष्ठ (Page Turn): 
+   - चरणों को पृष्ठों (Pages 1, 2, 3...) में बांटें। 
+   - चरण 1-4: पृष्ठ 1 (अवधारणा एवं परिभाषा)
+   - चरण 5-8: पृष्ठ 2 (विस्तृत व्याख्या, चित्र/सूत्र या उदाहरण हल)
+   - चरण 9-11: पृष्ठ 3 (पुनरावृत्ति और परीक्षा प्रश्न)
+   - प्रत्येक चरण में "page": 1, 2, या 3 अवश्य लिखें।
+5. मार्कर के रंग नियम (Marker Colors):
+   - शीर्षक (Headings): नीला ("#2563EB")
+   - मुख्य बिंदु (Main points): गहरा स्लेट / काला ("#1E293B")
+   - महत्वपूर्ण शब्द (Important keywords): लाल ("#DC2626")
+   - अंतिम हल एवं सूत्र (Final answers/Formulas): हरा ("#059669")
+   - हाइलाइट (Highlight): पीला ("#FEF08A")
+6. फॉन्ट का आकार (Font Size): कम से कम 22px (22 से 30px) ताकि मोबाइल पर आसानी से पढ़ा जा सके और बोर्ड भरा-भरा दिखे।
+7. जब किसी पहले से लिखी चीज़ की ओर इशारा करना हो, तो "say" में "यहाँ देखिए..." कहें और "type": "point" या "highlight" क्रिया का उपयोग करें।
+
+संरचित JSON पाठ प्रारूप लौटाएं:
+- "title": आकर्षक और स्पष्ट शीर्षक
+- "steps": 8 से 12 चरणों की सूची (प्रत्येक में "say", "page", और "board")`;
 
   const lessonSchema = {
     type: Type.OBJECT,
@@ -328,6 +395,7 @@ Rules for Whiteboard layout:
           type: Type.OBJECT,
           properties: {
             say: { type: Type.STRING },
+            page: { type: Type.NUMBER },
             board: {
               type: Type.ARRAY,
               items: {
@@ -341,12 +409,24 @@ Rules for Whiteboard layout:
                   fontSize: { type: Type.NUMBER },
                   width: { type: Type.NUMBER },
                   height: { type: Type.NUMBER },
+                  isPointing: { type: Type.BOOLEAN },
                   data: {
                     type: Type.OBJECT,
                     properties: {
                       fn: { type: Type.STRING },
                       label: { type: Type.STRING },
                       shape: { type: Type.STRING },
+                      steps: {
+                        type: Type.ARRAY,
+                        items: {
+                          type: Type.OBJECT,
+                          properties: {
+                            stepNum: { type: Type.NUMBER },
+                            expr: { type: Type.STRING },
+                            reason: { type: Type.STRING },
+                          },
+                        },
+                      },
                     },
                   },
                 },
@@ -372,7 +452,7 @@ Rules for Whiteboard layout:
   }
   contents.push({ text: promptText });
 
-  const rawText = await executeWithModelRetry(
+  const rawText = await executeWithSmartRetry(
     settings.textModel || 'gemini-2.5-flash',
     settings.availableTextModels,
     async (modelToUse) => {
@@ -395,6 +475,12 @@ Rules for Whiteboard layout:
       if (parsed.title && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
         parsed.id = 'lesson-' + Date.now();
         parsed.createdAt = new Date().toISOString();
+        // Ensure steps have assigned page numbers if omitted
+        parsed.steps.forEach((step, idx) => {
+          if (!step.page) {
+            step.page = Math.floor(idx / 4) + 1;
+          }
+        });
         return { lesson: parsed };
       }
     } catch (jsonErr) {
@@ -405,7 +491,83 @@ Rules for Whiteboard layout:
 }
 
 /**
- * Standard conversational chat with streaming text response and 404 retry.
+ * Progressive whiteboard lesson generator:
+ * Generates initial 2-3 steps instantly so teaching starts without delay,
+ * then loads remaining steps in the background!
+ */
+export async function generateWhiteboardLessonProgressive(
+  prompt: string,
+  settings: UserSettings,
+  onInitialReady: (lesson: StructuredLesson) => void,
+  onComplete?: (lesson: StructuredLesson) => void,
+  imagePart?: { mimeType: string; data: string },
+  answerStyle?: string
+): Promise<StructuredLesson | null> {
+  const ai = getGenAI(settings.apiKey);
+  const contextStr = buildContextString(settings);
+
+  // Phase 1: Fast initial 3 steps
+  const phase1Prompt = `${contextStr}
+व्हाइटबोर्ड विषय: "${prompt}"
+
+कृपया इस विषय के पहले 3 शिक्षण चरण (Steps 1, 2, 3) तुरंत तैयार करें:
+- Step 1: एक वाक्य का मधुर स्वागत और मुख्य शीर्षक (Page 1)
+- Step 2: अवधारणा की शुरुआत, आसान उदाहरण (Page 1, 3 वाक्य)
+- Step 3: मुख्य नियम या मुख्य सूत्र (Page 1, 3 वाक्य)
+रंग: शीर्षक "#2563EB", मुख्य बिंदु "#1E293B", सूत्र "#059669", फॉन्ट साइज 22-26px.
+JSON में "title" और 3 "steps" लौटाएं।`;
+
+  let baseLesson: StructuredLesson | null = null;
+
+  try {
+    const res1 = await executeWithSmartRetry(
+      settings.textModel || 'gemini-2.5-flash',
+      settings.availableTextModels,
+      async (modelToUse) => {
+        const resp = await ai.models.generateContent({
+          model: modelToUse,
+          contents: [{ text: phase1Prompt }],
+          config: {
+            systemInstruction: SARA_BASE_SYSTEM_INSTRUCTION,
+            responseMimeType: 'application/json',
+          },
+        });
+        return resp.text?.trim() || '';
+      }
+    );
+
+    if (res1) {
+      const parsed = JSON.parse(res1) as StructuredLesson;
+      if (parsed.title && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
+        parsed.id = 'lesson-' + Date.now();
+        parsed.createdAt = new Date().toISOString();
+        parsed.steps.forEach((s) => (s.page = 1));
+        baseLesson = parsed;
+        onInitialReady(parsed);
+      }
+    }
+  } catch (err) {
+    console.warn('Phase 1 fast generation failed, falling back to full generation:', err);
+  }
+
+  // Phase 2: In parallel or background, generate the full complete lesson (8-12 steps)
+  try {
+    const fullRes = await generateWhiteboardLesson(prompt, settings, imagePart, answerStyle);
+    if (fullRes.lesson) {
+      if (onComplete) {
+        onComplete(fullRes.lesson);
+      }
+      return fullRes.lesson;
+    }
+  } catch (fullErr) {
+    console.warn('Full lesson generation error:', fullErr);
+  }
+
+  return baseLesson;
+}
+
+/**
+ * Standard conversational chat with streaming text response and 503/404 retry.
  */
 export async function streamChatResponse(
   messages: { role: 'user' | 'assistant'; content: string; image?: string }[],
@@ -420,7 +582,7 @@ export async function streamChatResponse(
 
   let styleInstruction = '';
   if (answerStyle) {
-    styleInstruction = `\nRequired Answer Style: ${answerStyle}. Follow this format strictly while keeping Sara's cheerful personality.`;
+    styleInstruction = `\nशैली निर्देश (Answer Style): ${answerStyle}। हमेशा देवनागरी हिंदी में उत्तर दें।`;
   }
 
   const historyContents: any[] = [];
@@ -455,7 +617,7 @@ export async function streamChatResponse(
     });
   }
   currentParts.push({
-    text: `${contextStr}${styleInstruction}\n\nStudent asks: ${newPrompt}`,
+    text: `${contextStr}${styleInstruction}\n\nछात्र का प्रश्न: ${newPrompt}`,
   });
 
   historyContents.push({
@@ -463,15 +625,20 @@ export async function streamChatResponse(
     parts: currentParts,
   });
 
-  return await executeWithModelRetry(
+  return await executeWithSmartRetry(
     settings.textModel || 'gemini-2.5-flash',
     settings.availableTextModels,
     async (modelToUse) => {
+      const chatInstruction = `${SARA_BASE_SYSTEM_INSTRUCTION}
+
+अति-महत्वपूर्ण चैट नियम:
+जब भी छात्र किसी विषय, सवाल या किताब के पन्ने के बारे में पूछे, तो पहले उसे 5 से 8 पंक्तियों (lines) में बहुत ही स्पष्ट, सरल, मधुर और ज्ञानवर्धक संक्षिप्त उत्तर दें। विषय का सार, एक दैनिक जीवन का उदाहरण और सूत्र/नियम समझाएं। कभी भी केवल यह न कहें कि व्हाइटबोर्ड तैयार है, बल्कि यहाँ चैट में भी पूरा संतोषजनक उत्तर दें।`;
+
       const responseStream = await ai.models.generateContentStream({
         model: modelToUse,
         contents: historyContents,
         config: {
-          systemInstruction: SARA_BASE_SYSTEM_INSTRUCTION,
+          systemInstruction: chatInstruction,
         },
       });
 
@@ -489,14 +656,17 @@ export async function streamChatResponse(
 }
 
 /**
- * Text-To-Speech generation using Gemini TTS with 404 auto-retry.
+ * Text-To-Speech generation using Gemini TTS in Hindi.
+ * Sends clean Devanagari text with style instruction.
  */
 export async function generateGeminiTTS(
   rawText: string,
-  settings: UserSettings
+  settings: UserSettings,
+  isTeaching: boolean = false
 ): Promise<{ audioBase64: string; isWav: boolean }> {
   const ai = getGenAI(settings.apiKey);
 
+  // Clean text from markdown, emojis, asterisks, brackets - keep pure Devanagari text
   const cleanedText = rawText
     .replace(
       /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F700}-\u{1F77F}\u{1F780}-\u{1F7FF}\u{1F800}-\u{1F8FF}\u{1F900}-\u{1F9FF}\u{1FA00}-\u{1FA6F}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu,
@@ -510,13 +680,10 @@ export async function generateGeminiTTS(
     throw new Error('EMPTY_TEXT_FOR_TTS');
   }
 
-  const energyStyles = {
-    Calm: 'sweet, gentle, patient and caring young girl voice',
-    Cheerful: 'sweet, cute, cheerful, bubbly and encouraging young girl voice',
-    'Super bubbly': 'ultra-cute, energetic, enthusiastic and bubbly anime schoolgirl voice',
-  };
-
-  const stylePrefix = `Say in a ${energyStyles[settings.voiceEnergy] || energyStyles.Cheerful}: `;
+  // Teacher voice style requested for whiteboard teaching, or sweet chat style
+  const stylePrefix = isTeaching
+    ? 'Say like a warm, friendly young woman teaching a student, in natural Hindi, sweet and cute, with natural pauses and a slight smile, clear and not rushed: '
+    : "Say in a sweet, cute, cheerful, bubbly young girl's voice, in natural Hindi: ";
   const speechPrompt = `${stylePrefix}${cleanedText}`;
 
   const ttsFallbacks = [
@@ -526,7 +693,7 @@ export async function generateGeminiTTS(
     'gemini-3.8-flash-tts',
   ];
 
-  return await executeWithModelRetry(
+  return await executeWithSmartRetry(
     settings.ttsModel || 'gemini-3.1-flash-tts-preview',
     ttsFallbacks,
     async (modelToUse) => {
@@ -567,7 +734,7 @@ export async function generateGeminiTTS(
 }
 
 /**
- * Check student's handwritten work on whiteboard with 404 auto-retry.
+ * Check student's handwritten work on whiteboard with smart retry.
  */
 export async function checkStudentWork(
   boardSnapshotBase64: string,
@@ -580,16 +747,16 @@ export async function checkStudentWork(
 
   const prompt = `${contextStr}
 
-The student drew or wrote their work on Sara's whiteboard and clicked "Check my work".
-Student's note or question: "${userNotesOrPrompt || 'Please check my solution on the whiteboard and tell me what is right and what needs fixing.'}"
+छात्र ने सारा के व्हाइटबोर्ड पर अपना हल या नोट्स लिखे हैं और "मेरा काम जांचें (Check my work)" पर क्लिक किया है।
+छात्र का नोट: "${userNotesOrPrompt || 'कृपया व्हाइटबोर्ड पर मेरे हल की जांच करें और बताएं कि क्या सही है और क्या सुधारना है।'}"
 
-Task:
-1. Examine the student's handwritten/drawn steps carefully.
-2. Tell them what steps are 100% correct first with cheerful encouragement!
-3. If there is a calculation error, formula mismatch, sign error (+/-), or missing unit, point it out gently and show how to fix it step-by-step.
-4. Keep the tone warm, cute, and educational like a caring study buddy.`;
+कार्य:
+1. छात्र के हाथ से लिखे चरणों को ध्यान से जांचें।
+2. सबसे पहले उत्साहवर्धक अंदाज में बताएं कि कौन-से चरण बिल्कुल सही हैं।
+3. यदि कोई गणना, सूत्र या चिन्ह (+/-) की गलती है, तो उसे बहुत प्यार से बताएं और सही हल लिखकर समझाएं।
+4. उत्तर हमेशा शुद्ध और मधुर देवनागरी हिंदी में दें।`;
 
-  return await executeWithModelRetry(
+  return await executeWithSmartRetry(
     settings.textModel || 'gemini-2.5-flash',
     settings.availableTextModels,
     async (modelToUse) => {
@@ -608,13 +775,16 @@ Task:
           systemInstruction: SARA_BASE_SYSTEM_INSTRUCTION,
         },
       });
-      return response.text || 'Hehe, I checked your board! Everything looks neat, keep going! ✨';
+      return (
+        response.text ||
+        'अरे वाह! मैंने आपका काम देखा! आपका हल बहुत साफ-सुथरा है, ऐसे ही मन लगाकर पढ़ते रहिए! ✨'
+      );
     }
   );
 }
 
 /**
- * Exam Practice: Generates 20 Board-Exam Style MCQs with 404 auto-retry.
+ * Exam Practice: Generates 20 Board-Exam Style MCQs in Hindi.
  */
 export async function generateExamMCQs(
   subject: string,
@@ -638,20 +808,19 @@ export async function generateExamMCQs(
 
   const prompt = `${contextStr}
 
-Create an official Exam Practice Quiz for:
-Subject: ${subject}
-Chapter / Topic: ${chapter}
-Target Level: ${settings.academicLevel || 'Class 10 (Matric)'}
-Target Board: ${settings.boardExam || 'Bihar Board (BSEB)'}
+निम्नलिखित विषय और अध्याय के लिए 20 महत्वपूर्ण बोर्ड-स्तरीय बहुविकल्पीय प्रश्न (MCQs) बनाएं:
+विषय: ${subject}
+अध्याय / टॉपिक: ${chapter}
+कक्षा: ${settings.academicLevel || 'Class 10 (Matric)'}
+बोर्ड: ${settings.boardExam || 'Bihar Board (BSEB)'}
 
-Generate exactly 20 board-exam-style Multiple Choice Questions (MCQs).
-Rules:
-- Questions must follow the real board exam syllabus and question patterns (direct definitions, formula applications, numericals, diagrams/concept tests).
-- 4 clear options for each question (A, B, C, D).
-- Specify the correct answerIndex (0, 1, 2, or 3).
-- Provide a clear, step-by-step explanation for the correct answer.
-- Tag each question with its specific sub-topic (e.g. "Ohm's Law", "Mendelian Inheritance", "Trigonometric Identities").
-- Language should be ${settings.language || 'Hinglish'} with terms matching the board exam textbook.`;
+नियम:
+- सभी प्रश्न, विकल्प और व्याख्या शुद्ध देवनागरी हिंदी में होने चाहिए।
+- वास्तविक बोर्ड परीक्षा के पैटर्न (परिभाषाएं, सूत्र आधारित प्रश्न, आंकिक प्रश्न) का पालन करें।
+- प्रत्येक प्रश्न में 4 स्पष्ट विकल्प (A, B, C, D) हों।
+- सही उत्तर का इंडेक्स (answerIndex: 0, 1, 2, या 3) निर्दिष्ट करें।
+- सही उत्तर की सरल, स्पष्ट हिंदी व्याख्या (explanation) दें।
+- उप-विषय (topic) का नाम लिखें।`;
 
   contents.push({ text: prompt });
 
@@ -674,7 +843,7 @@ Rules:
     },
   };
 
-  const rawText = await executeWithModelRetry(
+  const rawText = await executeWithSmartRetry(
     settings.textModel || 'gemini-2.5-flash',
     settings.availableTextModels,
     async (modelToUse) => {
@@ -696,7 +865,7 @@ Rules:
 }
 
 /**
- * Live Look single-frame query with 404 auto-retry.
+ * Live Look single-frame query in Hindi.
  */
 export async function queryLiveLookFrame(
   frameBase64: string,
@@ -708,14 +877,13 @@ export async function queryLiveLookFrame(
   const base64Clean = frameBase64.replace(/^data:image\/[a-zA-Z+]+;base64,/, '');
 
   const prompt = `${contextStr}
-Mode: LIVE LOOK (Sara is watching the student's notebook/desk through their live camera).
-Student says: "${userSpeechText || 'Sara, what do you see? Can you guide me here?'}"
+मोड: लाइव लुक (Sara छात्र की नोटबुक या किताब को कैमरे से देख रही है)।
+छात्र ने कहा: "${userSpeechText || 'सारा, सामने क्या दिख रहा है? कृपया मुझे समझाइए।'}"
 
-Look at what is in the camera view (math problem, diagram, textbook, or student's handwriting).
-Answer in 1-3 short, cheerful, immediate sentences as if sitting right beside them!
-If the image is too blurry to read, kindly ask: "Aww, it's a little blurry! Could you hold the camera a little steadier or bring it closer, please?"`;
+कैमरे में जो भी सवाल, चित्र या छात्र का हाथ से लिखा हल दिख रहा है, उसे देखकर 1-2 बहुत प्यारे, मीठे हिंदी वाक्यों में तुरंत मार्गदर्शन दें।
+यदि तस्वीर धुंधली हो, तो प्यार से कहें: "अरे, तस्वीर थोड़ी धुंधली लग रही है! कृपया कैमरे को थोड़ा पास या स्थिर रखिए ना? 🌸"`;
 
-  return await executeWithModelRetry(
+  return await executeWithSmartRetry(
     settings.textModel || 'gemini-2.5-flash',
     settings.availableTextModels,
     async (modelToUse) => {
@@ -734,42 +902,48 @@ If the image is too blurry to read, kindly ask: "Aww, it's a little blurry! Coul
           systemInstruction: SARA_BASE_SYSTEM_INSTRUCTION,
         },
       });
-      return response.text || "Hehe, I'm watching! Tell me what you're working on! ✨";
+      return (
+        response.text ||
+        'नमस्ते! मैं आपकी कॉपी देख रही हूँ, बताइए क्या समझना चाहते हैं? ✨'
+      );
     }
   );
 }
 
 /**
- * Friendly error message formatter (never exposes user's API key).
+ * Friendly Hindi error message formatter (never exposes user's API key).
  */
 export function formatFriendlyError(err: any): string {
   const msg = err?.message || String(err);
 
-  // If the error message already has the exact model name from executeWithModelRetry:
-  if (msg.includes('was not found (404)')) {
+  if (
+    msg.includes('503') ||
+    msg.includes('high demand') ||
+    msg.includes('UNAVAILABLE') ||
+    msg.includes('व्यस्त')
+  ) {
+    return 'सारा अभी थोड़ी व्यस्त है 🥺 कुछ सेकंड बाद फिर कोशिश कीजिए';
+  }
+  if (msg.includes('404') || msg.includes('उपलब्ध नहीं है')) {
     return msg;
   }
-
-  if (
-    msg.includes('API_KEY_MISSING') ||
-    msg.includes('API_KEY_INVALID') ||
-    (msg.includes('400') && msg.toLowerCase().includes('key'))
-  ) {
-    return "Oopsie! Your Gemini API key seems missing or invalid. Please check and re-paste your key in Settings 🔑";
-  }
   if (msg.includes('RESOURCE_EXHAUSTED') || msg.includes('429')) {
-    return "Sara's thinking brain hit Gemini quota limit! Please wait a minute or switch to another key in Settings ⏳";
+    return 'सारा का सोचने का कोटा (Quota) पूरा हो गया है ⏳ कृपया 1 मिनट बाद फिर प्रयास करें या सेटिंग्स में दूसरी चाबी बदलें।';
   }
-  if (msg.includes('PERMISSION_DENIED') || msg.includes('403')) {
-    return "Access permission denied! Please check if your Gemini API key has Gemini API access enabled in Google AI Studio 🛡️";
+  if (
+    msg.includes('API_KEY') ||
+    (msg.includes('400') && msg.toLowerCase().includes('key')) ||
+    msg.includes('PERMISSION_DENIED') ||
+    msg.includes('403')
+  ) {
+    return 'आपकी Gemini API चाबी (Key) में समस्या है 🔑 कृपया सेटिंग्स में जाकर अपनी चाबी दोबारा जांचें।';
   }
   if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || !navigator.onLine) {
-    return "Aww, internet connection dropped! Please check your Wi-Fi or mobile data and try again 🌐";
+    return 'इंटरनेट कनेक्शन में रुकावट आई है 🌐 कृपया अपना वाई-फ़ाई या मोबाइल डेटा जांचें।';
   }
   if (msg.includes('NotAllowedError') || msg.includes('Permission denied')) {
-    return "Camera or microphone permission was blocked! Please tap the lock icon in your browser address bar to allow Sara access 📷🎙️";
+    return 'कैमरा या माइक की अनुमति नहीं मिली 📷🎙️ कृपया अपने ब्राउज़र में ऊपर ताले (Lock) वाले निशान पर क्लिक करके अनुमति दें।';
   }
 
-  // Generic sanitized error
-  return `Hehe, something went a little wonky: ${msg.slice(0, 140)}. Let's try once more!`;
+  return 'अरे, कुछ तकनीकी समस्या आई है 🥺 कृपया दोबारा कोशिश करें!';
 }

@@ -3,10 +3,9 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import {
-  BookOpen,
   Clock,
   CheckCircle,
   XCircle,
@@ -16,9 +15,7 @@ import {
   RotateCcw,
   Sparkles,
   X,
-  FileText,
   AlertTriangle,
-  Send,
 } from 'lucide-react';
 import { UserSettings, MCQQuestion, ExamSession } from '../types';
 import { generateExamMCQs } from '../services/gemini';
@@ -36,24 +33,20 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
   settings,
   onExplainOnWhiteboard,
 }) => {
-  // Phase: 'setup' | 'quiz' | 'result'
   const [phase, setPhase] = useState<'setup' | 'quiz' | 'result'>('setup');
 
-  // Setup form
-  const [selectedSubject, setSelectedSubject] = useState<string>('Mathematics');
-  const [chapterName, setChapterName] = useState<string>('Real Numbers & Quadratic Equations');
+  const [selectedSubject, setSelectedSubject] = useState<string>('गणित (Mathematics)');
+  const [chapterName, setChapterName] = useState<string>('वास्तविक संख्याएं और द्विघात समीकरण');
   const [pastedNotes, setPastedNotes] = useState<string>('');
   const [isLoadingQuiz, setIsLoadingQuiz] = useState<boolean>(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  // Quiz state
   const [questions, setQuestions] = useState<MCQQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const [userAnswers, setUserAnswers] = useState<Record<number, number>>({});
   const [timeLeft, setTimeLeft] = useState<number>(20 * 60); // 20 minutes
   const [timerActive, setTimerActive] = useState<boolean>(false);
 
-  // Countdown timer
   useEffect(() => {
     let interval: number;
     if (timerActive && timeLeft > 0 && phase === 'quiz') {
@@ -78,7 +71,7 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
 
   const handleStartExam = async () => {
     if (!chapterName.trim()) {
-      setErrorMsg('Please specify a chapter or topic name!');
+      setErrorMsg('कृपया किसी अध्याय या टॉपिक का नाम अवश्य लिखें!');
       return;
     }
 
@@ -88,12 +81,12 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
     try {
       const generated = await generateExamMCQs(
         selectedSubject,
-        chapterName + (pastedNotes ? ` (Notes: ${pastedNotes.slice(0, 300)})` : ''),
+        chapterName + (pastedNotes ? ` (नोट्स: ${pastedNotes.slice(0, 300)})` : ''),
         settings
       );
 
       if (!generated || generated.length === 0) {
-        throw new Error('Failed to generate questions. Please try again.');
+        throw new Error('प्रश्न तैयार नहीं हो सके। कृपया दोबारा प्रयास करें।');
       }
 
       setQuestions(generated);
@@ -104,7 +97,7 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
       setTimerActive(true);
     } catch (err: any) {
       console.error('Error generating MCQs:', err);
-      setErrorMsg(err.message || 'Could not generate exam questions. Please try once more!');
+      setErrorMsg(err.message || 'प्रश्न तैयार करने में समस्या आई। कृपया फिर से कोशिश करें!');
     } finally {
       setIsLoadingQuiz(false);
     }
@@ -120,7 +113,6 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
   const handleFinishExam = () => {
     setTimerActive(false);
 
-    // Calculate score
     let score = 0;
     const weakTopicsList: string[] = [];
 
@@ -135,14 +127,12 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
       }
     });
 
-    // Save weak topics to localStorage
     try {
       const existingRaw = localStorage.getItem('sara_weak_topics');
       const existing: string[] = existingRaw ? JSON.parse(existingRaw) : [];
       const updated = Array.from(new Set([...existing, ...weakTopicsList]));
       localStorage.setItem('sara_weak_topics', JSON.stringify(updated));
 
-      // Save Exam Session History
       const sessionHistory: ExamSession = {
         subject: selectedSubject,
         chapter: chapterName,
@@ -151,7 +141,7 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
         score,
         total: questions.length,
         timeSpentSeconds: 20 * 60 - timeLeft,
-        date: new Date().toLocaleDateString(),
+        date: new Date().toLocaleDateString('hi-IN'),
         weakTopics: weakTopicsList,
       };
       const existingSessionsRaw = localStorage.getItem('sara_exam_sessions');
@@ -163,7 +153,6 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
 
     setPhase('result');
 
-    // Trigger celebration confetti if score >= 70%
     if (questions.length > 0 && score / questions.length >= 0.7) {
       confetti({
         particleCount: 80,
@@ -196,10 +185,10 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
             </div>
             <div>
               <h3 className="font-bold text-slate-800 dark:text-slate-100 text-sm sm:text-base">
-                Exam Practice Mode · 20 MCQs
+                बोर्ड परीक्षा प्रैक्टिस · 20 बहुविकल्पीय प्रश्न (MCQs)
               </h3>
               <p className="text-xs text-slate-500">
-                {settings.boardExam || 'Bihar Board (BSEB)'} / {settings.academicLevel || 'Class 10'} Pattern
+                {settings.boardExam || 'बिहार बोर्ड (BSEB)'} / {settings.academicLevel || 'कक्षा 10'} पैटर्न
               </p>
             </div>
           </div>
@@ -219,18 +208,18 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
             <div className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Select Subject:
+                  विषय चुनें:
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {[
-                    'Mathematics',
-                    'Science (Physics)',
-                    'Science (Chemistry)',
-                    'Science (Biology)',
-                    'Social Science',
-                    'English',
-                    'Hindi',
-                    'Computer Science',
+                    'गणित (Mathematics)',
+                    'भौतिकी (Physics)',
+                    'रसायनशास्त्र (Chemistry)',
+                    'जीवविज्ञान (Biology)',
+                    'सामाजिक विज्ञान (Social)',
+                    'अंग्रेजी (English)',
+                    'हिंदी (Hindi)',
+                    'कंप्यूटर (Computer)',
                   ].map((sub) => (
                     <button
                       key={sub}
@@ -249,26 +238,26 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Chapter or Exam Topic:
+                  अध्याय या परीक्षा टॉपिक का नाम:
                 </label>
                 <input
                   type="text"
                   value={chapterName}
                   onChange={(e) => setChapterName(e.target.value)}
-                  placeholder="e.g. Real Numbers, Trigonometry, Light & Reflection, Electricity"
+                  placeholder="जैसे: वास्तविक संख्याएं, त्रिकोणमिति, प्रकाश का परावर्तन, विद्युत धारा"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-hidden focus:ring-2 focus:ring-pink-300 dark:text-white"
                 />
               </div>
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
-                  Optional: Paste Notes or Syllabus Text
+                  वैकल्पिक: अपने नोट्स या मुख्य बिंदु पेस्ट करें
                 </label>
                 <textarea
                   value={pastedNotes}
                   onChange={(e) => setPastedNotes(e.target.value)}
                   rows={3}
-                  placeholder="Paste specific definitions, formulas, or question types you want Sara to test you on..."
+                  placeholder="यदि किसी विशेष परिभाषा या फॉर्मूले पर प्रश्न चाहिए, तो यहाँ लिख सकते हैं..."
                   className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-xs focus:outline-hidden focus:ring-2 focus:ring-pink-300 dark:text-white"
                 />
               </div>
@@ -288,12 +277,12 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
                 {isLoadingQuiz ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Sara is crafting your 20 Board Exam MCQs...</span>
+                    <span>सारा आपके 20 बोर्ड परीक्षा प्रश्न तैयार कर रही है...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="w-4 h-4" />
-                    <span>Start 20-MCQ Timed Exam</span>
+                    <span>20-MCQ टाइमर टेस्ट शुरू करें</span>
                   </>
                 )}
               </button>
@@ -303,11 +292,10 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
           {/* PHASE 2: QUIZ IN PROGRESS */}
           {phase === 'quiz' && currentQ && (
             <div className="space-y-4">
-              {/* Timer & Progress bar */}
               <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
                 <div className="flex items-center gap-2 text-xs font-bold text-slate-600 dark:text-slate-400">
                   <span className="text-pink-600 font-extrabold text-sm">
-                    Q{currentIndex + 1}
+                    प्रश्न {currentIndex + 1}
                   </span>
                   <span>/ {questions.length}</span>
                   {currentQ.topic && (
@@ -323,18 +311,16 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
                 </div>
               </div>
 
-              {/* Question text */}
               <div className="p-4 rounded-2xl bg-pink-50/40 dark:bg-slate-800/60 border border-pink-100 dark:border-slate-700">
                 <p className="text-sm sm:text-base font-bold text-slate-800 dark:text-slate-100 leading-snug">
                   {currentQ.question}
                 </p>
               </div>
 
-              {/* 4 MCQ Options */}
               <div className="space-y-2">
                 {currentQ.options.map((option, optIdx) => {
                   const isSelected = userAnswers[currentIndex] === optIdx;
-                  const letter = String.fromCharCode(65 + optIdx); // A, B, C, D
+                  const letter = String.fromCharCode(65 + optIdx);
                   return (
                     <button
                       key={optIdx}
@@ -342,7 +328,7 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
                       className={`w-full p-3 rounded-xl border text-left text-xs sm:text-sm font-semibold transition-all flex items-center gap-3 ${
                         isSelected
                           ? 'bg-pink-500 text-white border-pink-500 shadow-xs'
-                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                          : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:bg-slate-50'
                       }`}
                     >
                       <span
@@ -360,7 +346,6 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
                 })}
               </div>
 
-              {/* Bottom Nav Controls */}
               <div className="flex items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800 gap-2">
                 <button
                   onClick={() => setCurrentIndex((prev) => Math.max(0, prev - 1))}
@@ -368,7 +353,7 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
                   className="flex items-center gap-1 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 disabled:opacity-40"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
-                  <span>Previous</span>
+                  <span>पिछला प्रश्न</span>
                 </button>
 
                 {currentIndex < questions.length - 1 ? (
@@ -376,7 +361,7 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
                     onClick={() => setCurrentIndex((prev) => prev + 1)}
                     className="flex items-center gap-1 px-4 py-2 rounded-xl bg-pink-500 hover:bg-pink-600 text-white text-xs font-bold shadow-xs"
                   >
-                    <span>Next</span>
+                    <span>अगला प्रश्न</span>
                     <ArrowRight className="w-3.5 h-3.5" />
                   </button>
                 ) : (
@@ -385,12 +370,11 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
                     className="flex items-center gap-1 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md"
                   >
                     <CheckCircle className="w-3.5 h-3.5" />
-                    <span>Submit & View Score</span>
+                    <span>जमा करें और स्कोर देखें</span>
                   </button>
                 )}
               </div>
 
-              {/* Quick Jump Question Matrix */}
               <div className="pt-2">
                 <div className="flex items-center gap-1 overflow-x-auto py-1">
                   {questions.map((_, idx) => (
@@ -416,30 +400,28 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
           {/* PHASE 3: RESULTS & WHITEBOARD REVIEW */}
           {phase === 'result' && (
             <div className="space-y-5">
-              {/* Scorecard banner */}
               <div className="p-6 rounded-2xl bg-gradient-to-r from-pink-50 to-purple-50 dark:from-slate-800 dark:to-slate-800 border border-pink-100 dark:border-slate-700 text-center space-y-2">
                 <div className="w-12 h-12 rounded-full bg-pink-500 text-white flex items-center justify-center mx-auto shadow-md">
                   <Award className="w-6 h-6" />
                 </div>
                 <h4 className="text-xl font-black text-slate-800 dark:text-slate-100">
                   {scoreCount >= 16
-                    ? '🎉 Shabaash! Outstanding Performance!'
+                    ? '🎉 शाबाश! बहुत ही शानदार परिणाम!'
                     : scoreCount >= 10
-                    ? '👍 Good Effort! A little more practice!'
-                    : "💪 Don't worry! Sara is here to teach you!"}
+                    ? '👍 अच्छा प्रयास! थोड़ी और मेहनत से 100% होगा!'
+                    : "💪 चिंता न करें! सारा आपको हर गलती समझाएगी!"}
                 </h4>
                 <p className="text-3xl font-extrabold text-pink-600">
                   {scoreCount} / {questions.length}
                 </p>
                 <p className="text-xs text-slate-500">
-                  Percentage: {Math.round((scoreCount / questions.length) * 100)}% · Time Spent: {formatTime(20 * 60 - timeLeft)}
+                  प्रतिशत: {Math.round((scoreCount / questions.length) * 100)}% · समय लिया गया: {formatTime(20 * 60 - timeLeft)}
                 </p>
               </div>
 
-              {/* Mistake Review List */}
               <div className="space-y-3">
                 <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
-                  Review & Whiteboard Explanations:
+                  गलतियों की समीक्षा और व्हाइटबोर्ड पर समझना:
                 </h5>
 
                 {questions.map((q, idx) => {
@@ -462,19 +444,19 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
                             <XCircle className="w-4 h-4 text-rose-600 shrink-0" />
                           )}
                           <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                            Q{idx + 1}. {q.question}
+                            प्रश्न {idx + 1}. {q.question}
                           </span>
                         </div>
                       </div>
 
                       <div className="text-xs space-y-1 mb-2">
                         <p className="text-slate-600 dark:text-slate-300">
-                          <span className="font-semibold">Correct Answer:</span> Option{' '}
+                          <span className="font-semibold">सही उत्तर:</span> विकल्प{' '}
                           {String.fromCharCode(65 + q.answerIndex)} ({q.options[q.answerIndex]})
                         </p>
                         {!isCorrect && selected !== undefined && (
                           <p className="text-rose-600 dark:text-rose-400">
-                            <span className="font-semibold">You Chose:</span> Option{' '}
+                            <span className="font-semibold">आपने चुना:</span> विकल्प{' '}
                             {String.fromCharCode(65 + selected)} ({q.options[selected]})
                           </p>
                         )}
@@ -483,7 +465,6 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
                         </p>
                       </div>
 
-                      {/* Explain on Whiteboard Button */}
                       {!isCorrect && (
                         <button
                           onClick={() => {
@@ -493,7 +474,7 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
                           className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-pink-500 hover:bg-pink-600 text-white font-bold text-xs shadow-2xs transition-all"
                         >
                           <Sparkles className="w-3.5 h-3.5" />
-                          <span>Explain this on Whiteboard</span>
+                          <span>व्हाइटबोर्ड पर समझाओ</span>
                         </button>
                       )}
                     </div>
@@ -501,20 +482,19 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
                 })}
               </div>
 
-              {/* Action buttons */}
               <div className="flex items-center gap-2 pt-2">
                 <button
                   onClick={resetToSetup}
                   className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold transition-colors flex items-center justify-center gap-1.5"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Practice Another Chapter</span>
+                  <span>दूसरा अध्याय चुनें</span>
                 </button>
                 <button
                   onClick={onClose}
                   className="px-5 py-2.5 rounded-xl bg-pink-500 hover:bg-pink-600 text-white text-xs font-bold transition-colors"
                 >
-                  Back to Study Room
+                  अध्ययन कक्ष में वापस जाएं
                 </button>
               </div>
             </div>
