@@ -48,7 +48,7 @@ export const LiveLookModal: React.FC<LiveLookModalProps> = ({
   // Initialize Camera Stream
   const initStream = useCallback(async (facing: 'environment' | 'user') => {
     if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
+      streamRef.current?.getTracks?.()?.forEach((t) => t.stop());
     }
 
     try {
@@ -191,7 +191,7 @@ export const LiveLookModal: React.FC<LiveLookModalProps> = ({
       setSaraSubtitle('नमस्ते! मैं आपकी कॉपी देख रही हूँ। लिखते हुए कुछ भी पूछिए! 🌸');
     } else {
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current?.getTracks?.()?.forEach((t) => t.stop());
         streamRef.current = null;
       }
       audioPlayer.stop();
@@ -200,7 +200,7 @@ export const LiveLookModal: React.FC<LiveLookModalProps> = ({
 
     return () => {
       if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current?.getTracks?.()?.forEach((t) => t.stop());
       }
     };
   }, [isOpen, facingMode]);

@@ -4,7 +4,7 @@
  */
 
 import { GoogleGenAI, Type } from '@google/genai';
-import { StructuredLesson, UserSettings, MCQQuestion } from '../types';
+import { StructuredLesson, UserSettings, MCQQuestion, WhiteboardAction } from '../types';
 
 export const SARA_BASE_SYSTEM_INSTRUCTION = `आप सारा (Sara) हैं, एक बहुत ही प्यारी, मीठी और होशियार AI पढ़ाई वाली दोस्त (Study Buddy)। आप छात्र को स्कूल और बोर्ड परीक्षा (विशेष रूप से बिहार बोर्ड BSEB, CBSE, NCERT आदि) के किसी भी विषय को बहुत प्यार से, सरल उदाहरणों और व्हाइटबोर्ड पर लिखकर समझाती हैं।
 
@@ -332,6 +332,136 @@ function buildContextString(settings: UserSettings): string {
 - ${langPrompt}`;
 }
 
+const WHITEBOARD_LESSON_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    title: { type: Type.STRING },
+    steps: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          say: { type: Type.STRING },
+          page: { type: Type.NUMBER },
+          board: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                type: { type: Type.STRING },
+                x: { type: Type.NUMBER },
+                y: { type: Type.NUMBER },
+                content: { type: Type.STRING },
+                color: { type: Type.STRING },
+                fontSize: { type: Type.NUMBER },
+                width: { type: Type.NUMBER },
+                height: { type: Type.NUMBER },
+                isPointing: { type: Type.BOOLEAN },
+                role: { type: Type.STRING },
+                data: {
+                  type: Type.OBJECT,
+                  properties: {
+                    fn: { type: Type.STRING },
+                    label: { type: Type.STRING },
+                    shape: { type: Type.STRING },
+                    headers: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                    },
+                    rows: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.ARRAY,
+                        items: { type: Type.STRING },
+                      },
+                    },
+                    steps: {
+                      type: Type.ARRAY,
+                      items: {
+                        type: Type.OBJECT,
+                        properties: {
+                          stepNum: { type: Type.NUMBER },
+                          expr: { type: Type.STRING },
+                          reason: { type: Type.STRING },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+              required: ['type', 'x', 'y'],
+            },
+          },
+        },
+        required: ['say', 'board'],
+      },
+    },
+  },
+  required: ['title', 'steps'],
+};
+
+/**
+ * Safely sanitizes, validates, and normalizes a StructuredLesson
+ * Ensures every step has a valid non-empty 'board' array and 'say' string.
+ */
+function sanitizeStructuredLesson(raw: any, defaultTitle: string): StructuredLesson | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const rawSteps = Array.isArray(raw.steps) ? raw.steps : [];
+  if (rawSteps.length === 0) return null;
+
+  const title = (typeof raw.title === 'string' && raw.title.trim()) || defaultTitle || 'पाठ';
+
+  const sanitizedSteps = rawSteps.map((s: any, idx: number) => {
+    const say =
+      (typeof s?.say === 'string' && s.say.trim()) ||
+      (idx === 0 ? `नमस्ते! आइए ${title} सीखते हैं।` : `चरण ${idx + 1}`);
+    const page =
+      typeof s?.page === 'number' && s.page > 0 ? s.page : Math.floor(idx / 4) + 1;
+    let board: WhiteboardAction[] = [];
+
+    if (Array.isArray(s?.board) && s.board.length > 0) {
+      board = s.board.filter(Boolean).map((act: any) => ({
+        type: act.type || 'text',
+        x: typeof act.x === 'number' ? act.x : 10,
+        y: typeof act.y === 'number' ? act.y : 20,
+        content: act.content || '',
+        color: act.color || '#1E293B',
+        fontSize: act.fontSize || 22,
+        width: act.width,
+        height: act.height,
+        role: act.role,
+        isPointing: act.isPointing,
+        data: act.data,
+      }));
+    } else {
+      board = [
+        {
+          type: 'text',
+          x: 10,
+          y: 20 + (idx % 4) * 18,
+          content: idx === 0 ? `🌸 ${title}` : say.slice(0, 60),
+          color: idx === 0 ? '#2563EB' : '#1E293B',
+          fontSize: idx === 0 ? 26 : 22,
+          role: idx === 0 ? 'heading' : 'main',
+        },
+      ];
+    }
+
+    return {
+      say,
+      page,
+      board,
+    };
+  });
+
+  return {
+    id: 'lesson-' + Date.now(),
+    title,
+    steps: sanitizedSteps,
+    createdAt: new Date().toISOString(),
+  };
+}
+
 /**
  * Generates an interactive whiteboard structured lesson with smart 503 & 404 retry.
  */
@@ -385,62 +515,6 @@ ${stylePrompt}
 - "title": आकर्षक और स्पष्ट शीर्षक
 - "steps": 8 से 12 चरणों की सूची (प्रत्येक में "say", "page", और "board")`;
 
-  const lessonSchema = {
-    type: Type.OBJECT,
-    properties: {
-      title: { type: Type.STRING },
-      steps: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            say: { type: Type.STRING },
-            page: { type: Type.NUMBER },
-            board: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  type: { type: Type.STRING },
-                  x: { type: Type.NUMBER },
-                  y: { type: Type.NUMBER },
-                  content: { type: Type.STRING },
-                  color: { type: Type.STRING },
-                  fontSize: { type: Type.NUMBER },
-                  width: { type: Type.NUMBER },
-                  height: { type: Type.NUMBER },
-                  isPointing: { type: Type.BOOLEAN },
-                  data: {
-                    type: Type.OBJECT,
-                    properties: {
-                      fn: { type: Type.STRING },
-                      label: { type: Type.STRING },
-                      shape: { type: Type.STRING },
-                      steps: {
-                        type: Type.ARRAY,
-                        items: {
-                          type: Type.OBJECT,
-                          properties: {
-                            stepNum: { type: Type.NUMBER },
-                            expr: { type: Type.STRING },
-                            reason: { type: Type.STRING },
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
-                required: ['type', 'x', 'y'],
-              },
-            },
-          },
-          required: ['say', 'board'],
-        },
-      },
-    },
-    required: ['title', 'steps'],
-  };
-
   const contents: any[] = [];
   if (imagePart) {
     contents.push({
@@ -462,7 +536,7 @@ ${stylePrompt}
         config: {
           systemInstruction: SARA_BASE_SYSTEM_INSTRUCTION,
           responseMimeType: 'application/json',
-          responseSchema: lessonSchema as any,
+          responseSchema: WHITEBOARD_LESSON_SCHEMA as any,
         },
       });
       return response.text?.trim() || '';
@@ -471,17 +545,11 @@ ${stylePrompt}
 
   if (rawText) {
     try {
-      const parsed = JSON.parse(rawText) as StructuredLesson;
-      if (parsed.title && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
-        parsed.id = 'lesson-' + Date.now();
-        parsed.createdAt = new Date().toISOString();
-        // Ensure steps have assigned page numbers if omitted
-        parsed.steps.forEach((step, idx) => {
-          if (!step.page) {
-            step.page = Math.floor(idx / 4) + 1;
-          }
-        });
-        return { lesson: parsed };
+      const cleanRaw = rawText.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(cleanRaw);
+      const sanitized = sanitizeStructuredLesson(parsed, prompt);
+      if (sanitized) {
+        return { lesson: sanitized };
       }
     } catch (jsonErr) {
       console.warn('JSON parse fallback for whiteboard lesson:', jsonErr);
@@ -515,7 +583,7 @@ export async function generateWhiteboardLessonProgressive(
 - Step 2: अवधारणा की शुरुआत, आसान उदाहरण (Page 1, 3 वाक्य)
 - Step 3: मुख्य नियम या मुख्य सूत्र (Page 1, 3 वाक्य)
 रंग: शीर्षक "#2563EB", मुख्य बिंदु "#1E293B", सूत्र "#059669", फॉन्ट साइज 22-26px.
-JSON में "title" और 3 "steps" लौटाएं।`;
+प्रत्येक चरण में "say", "page", और "board" (चित्रण क्रियाएं) अवश्य शामिल करें।`;
 
   let baseLesson: StructuredLesson | null = null;
 
@@ -530,6 +598,7 @@ JSON में "title" और 3 "steps" लौटाएं।`;
           config: {
             systemInstruction: SARA_BASE_SYSTEM_INSTRUCTION,
             responseMimeType: 'application/json',
+            responseSchema: WHITEBOARD_LESSON_SCHEMA as any,
           },
         });
         return resp.text?.trim() || '';
@@ -537,13 +606,13 @@ JSON में "title" और 3 "steps" लौटाएं।`;
     );
 
     if (res1) {
-      const parsed = JSON.parse(res1) as StructuredLesson;
-      if (parsed.title && Array.isArray(parsed.steps) && parsed.steps.length > 0) {
-        parsed.id = 'lesson-' + Date.now();
-        parsed.createdAt = new Date().toISOString();
-        parsed.steps.forEach((s) => (s.page = 1));
-        baseLesson = parsed;
-        onInitialReady(parsed);
+      const clean1 = res1.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+      const parsed = JSON.parse(clean1);
+      const sanitized = sanitizeStructuredLesson(parsed, prompt);
+      if (sanitized && sanitized.steps.length > 0) {
+        sanitized.steps.forEach((s) => (s.page = 1));
+        baseLesson = sanitized;
+        onInitialReady(sanitized);
       }
     }
   } catch (err) {
@@ -860,8 +929,15 @@ export async function generateExamMCQs(
     }
   );
 
-  const questions: MCQQuestion[] = JSON.parse(rawText);
-  return questions.map((q, idx) => ({ ...q, id: idx + 1 }));
+  try {
+    const cleanText = rawText.replace(/```(?:json)?/gi, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(cleanText);
+    const questions: MCQQuestion[] = Array.isArray(parsed) ? parsed : [];
+    return questions.map((q, idx) => ({ ...q, id: idx + 1 }));
+  } catch (err) {
+    console.warn('Failed to parse MCQs JSON:', err);
+    return [];
+  }
 }
 
 /**

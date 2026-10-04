@@ -116,16 +116,18 @@ export const ExamPracticeModal: React.FC<ExamPracticeModalProps> = ({
     let score = 0;
     const weakTopicsList: string[] = [];
 
-    questions.forEach((q, idx) => {
-      const selected = userAnswers[idx];
-      if (selected === q.answerIndex) {
-        score++;
-      } else {
-        if (q.topic && !weakTopicsList.includes(q.topic)) {
-          weakTopicsList.push(q.topic);
+    if (Array.isArray(questions)) {
+      questions.forEach((q, idx) => {
+        const selected = userAnswers[idx];
+        if (selected === q.answerIndex) {
+          score++;
+        } else {
+          if (q.topic && !weakTopicsList.includes(q.topic)) {
+            weakTopicsList.push(q.topic);
+          }
         }
-      }
-    });
+      });
+    }
 
     try {
       const existingRaw = localStorage.getItem('sara_weak_topics');

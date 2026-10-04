@@ -128,28 +128,35 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({
     };
   }, [handleUserActivity]);
 
-  // Derive current step & page
-  const currentStep = lesson?.steps[currentStepIndex] || null;
+  // Derive current step & page safely
+  const currentStep =
+    lesson && Array.isArray(lesson.steps)
+      ? lesson.steps[currentStepIndex] || null
+      : null;
   const currentPage = currentStep?.page || Math.floor(currentStepIndex / 4) + 1;
   const totalPages = useMemo(() => {
-    if (!lesson || !lesson.steps.length) return 1;
+    if (!lesson || !Array.isArray(lesson.steps) || !lesson.steps.length) return 1;
     const maxPage = Math.max(
-      ...lesson.steps.map((s, idx) => s.page || Math.floor(idx / 4) + 1)
+      ...lesson.steps.map((s, idx) => s?.page || Math.floor(idx / 4) + 1)
     );
     return Math.max(1, maxPage);
   }, [lesson]);
 
   // Visible actions on current page up to current step
   const visiblePageActions = useMemo(() => {
-    if (!lesson || !currentStep) return [];
+    if (!lesson || !Array.isArray(lesson.steps) || !currentStep) return [];
     const actions: (WhiteboardAction & { stepIdx: number; actIdx: number })[] = [];
 
     for (let i = 0; i <= currentStepIndex; i++) {
       const step = lesson.steps[i];
+      if (!step) continue;
       const stepPage = step.page || Math.floor(i / 4) + 1;
       if (stepPage === currentPage) {
-        step.board.forEach((act, actIdx) => {
-          actions.push({ ...act, stepIdx: i, actIdx });
+        const boardItems = Array.isArray(step.board) ? step.board : [];
+        boardItems.forEach((act, actIdx) => {
+          if (act) {
+            actions.push({ ...act, stepIdx: i, actIdx });
+          }
         });
       }
     }
@@ -192,9 +199,11 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({
         if (elapsed >= activeWritingTime) {
           // Finished writing! Reveal all text and lift hand
           const allRevealed: Record<number, number> = {};
-          actions.forEach((a, i) => {
-            allRevealed[i] = a.content?.length || 999;
-          });
+          if (Array.isArray(actions)) {
+            actions.forEach((a, i) => {
+              if (a) allRevealed[i] = a.content?.length || 999;
+            });
+          }
           setRevealedChars(allRevealed);
 
           // Park hand gracefully
@@ -288,15 +297,18 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({
   // Play a specific step
   const playCurrentStep = useCallback(
     async (stepIdx: number) => {
-      if (!lesson || !lesson.steps[stepIdx]) return;
+      if (!lesson || !Array.isArray(lesson.steps) || !lesson.steps[stepIdx]) return;
       const step = lesson.steps[stepIdx];
+      if (!step) return;
+
+      const boardActions = Array.isArray(step.board) ? step.board : [];
 
       if (onSaraMoodChange) onSaraMoodChange('talking');
 
       // Check if page turn is required
       const nextStepPage = step.page || Math.floor(stepIdx / 4) + 1;
       const prevStepPage =
-        stepIdx > 0
+        stepIdx > 0 && lesson.steps[stepIdx - 1]
           ? lesson.steps[stepIdx - 1]?.page || Math.floor((stepIdx - 1) / 4) + 1
           : nextStepPage;
 
@@ -309,7 +321,7 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({
       setRevealedChars({});
 
       // Preload next step voice
-      if (lesson.steps[stepIdx + 1]) {
+      if (lesson.steps[stepIdx + 1] && lesson.steps[stepIdx + 1].say) {
         audioPlayer.preloadStepAudio(
           lesson.steps[stepIdx + 1].say,
           settings,
@@ -320,7 +332,7 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({
 
       // Speak current step with teacher voice and schedule hand writing
       await audioPlayer.speakText(
-        step.say,
+        step.say || '',
         settings,
         `teach-step-${stepIdx}`,
         () => {
@@ -329,8 +341,8 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({
 
           // Ensure all characters on board are fully revealed
           const allRevealed: Record<number, number> = {};
-          step.board.forEach((a, i) => {
-            allRevealed[i] = a.content?.length || 999;
+          boardActions.forEach((a, i) => {
+            if (a) allRevealed[i] = a.content?.length || 999;
           });
           setRevealedChars(allRevealed);
 
@@ -350,7 +362,7 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({
         },
         (durationMs) => {
           // Duration received from audio player! Start writing animation
-          startWritingAnimation(durationMs / playbackSpeed, step.board);
+          startWritingAnimation(durationMs / playbackSpeed, boardActions);
         },
         true // isTeaching: warm teacher voice
       );
@@ -360,7 +372,7 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({
 
   // Autoplay on load without requiring user to press play
   useEffect(() => {
-    if (lesson && lesson.steps.length > 0) {
+    if (lesson && Array.isArray(lesson.steps) && lesson.steps.length > 0) {
       setCurrentStepIndex(0);
       setIsPlaying(true);
       setHasSaved(false);
@@ -394,7 +406,7 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({
   };
 
   const handlePrevStep = () => {
-    if (!lesson || currentStepIndex <= 0) return;
+    if (!lesson || !Array.isArray(lesson.steps) || currentStepIndex <= 0) return;
     audioPlayer.stop();
     setIsPlaying(false);
     const newIdx = currentStepIndex - 1;
@@ -403,7 +415,7 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({
   };
 
   const handleNextStep = () => {
-    if (!lesson || currentStepIndex >= lesson.steps.length - 1) return;
+    if (!lesson || !Array.isArray(lesson.steps) || currentStepIndex >= lesson.steps.length - 1) return;
     audioPlayer.stop();
     setIsPlaying(false);
     const newIdx = currentStepIndex + 1;
@@ -412,7 +424,7 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({
   };
 
   const handleReplay = () => {
-    if (!lesson) return;
+    if (!lesson || !Array.isArray(lesson.steps) || lesson.steps.length === 0) return;
     audioPlayer.stop();
     setCurrentStepIndex(0);
     setIsPlaying(true);
@@ -1028,8 +1040,10 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({
               }
 
               case 'table': {
-                const headers = act.data?.headers || ['चरण', 'विवरण'];
-                const rows = act.data?.rows || [];
+                const headers = Array.isArray(act.data?.headers)
+                  ? act.data.headers
+                  : ['चरण', 'विवरण'];
+                const rows = Array.isArray(act.data?.rows) ? act.data.rows : [];
                 const colW = 180;
                 const rowH = 34;
                 return (
@@ -1060,7 +1074,8 @@ export const Whiteboard: React.FC<WhiteboardProps> = ({
                     {/* Rows */}
                     {rows.map((row, ri) => (
                       <g key={ri} transform={`translate(0, ${(ri + 1) * rowH})`}>
-                        {row.map((cell, ci) => (
+                        {Array.isArray(row) &&
+                          row.map((cell, ci) => (
                           <g key={ci} transform={`translate(${ci * colW}, 0)`}>
                             <rect
                               width={colW}

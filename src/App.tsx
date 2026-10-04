@@ -427,20 +427,43 @@ export default function App() {
     setSaraMood('thinking');
 
     try {
-      await generateWhiteboardLessonProgressive(
+      const finalLesson = await generateWhiteboardLessonProgressive(
         topicOrContent.slice(0, 450),
         settings,
         (initialLesson) => {
-          // Initial steps ready! Start playing immediately
-          setCurrentLesson(initialLesson);
-          setIsLoadingWhiteboardLesson(false);
-          setSaraMood('happy');
+          if (
+            initialLesson &&
+            Array.isArray(initialLesson.steps) &&
+            initialLesson.steps.length > 0
+          ) {
+            setCurrentLesson(initialLesson);
+            setIsLoadingWhiteboardLesson(false);
+            setSaraMood('happy');
+          }
         },
         (fullLesson) => {
-          // Full 8-12 steps ready in background! Update lesson
-          setCurrentLesson(fullLesson);
+          if (
+            fullLesson &&
+            Array.isArray(fullLesson.steps) &&
+            fullLesson.steps.length > 0
+          ) {
+            setCurrentLesson(fullLesson);
+          }
         }
       );
+
+      if (
+        finalLesson &&
+        Array.isArray(finalLesson.steps) &&
+        finalLesson.steps.length > 0
+      ) {
+        setCurrentLesson((prev) =>
+          prev && prev.steps && prev.steps.length >= finalLesson.steps.length
+            ? prev
+            : finalLesson
+        );
+      }
+      setIsLoadingWhiteboardLesson(false);
     } catch (err) {
       console.error('Error generating whiteboard lesson:', err);
       setIsLoadingWhiteboardLesson(false);

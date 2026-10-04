@@ -40,7 +40,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
     setCameraError(null);
 
     if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+      stream?.getTracks?.()?.forEach((track) => track.stop());
     }
 
     try {
@@ -88,13 +88,13 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
     if (isOpen && !capturedImage) {
       startCamera(facingMode);
     } else if (!isOpen && stream) {
-      stream.getTracks().forEach((track) => track.stop());
+      stream?.getTracks?.()?.forEach((track) => track.stop());
       setStream(null);
     }
 
     return () => {
       if (stream) {
-        stream.getTracks().forEach((track) => track.stop());
+        stream?.getTracks?.()?.forEach((track) => track.stop());
       }
     };
   }, [isOpen, facingMode, capturedImage]);
@@ -124,7 +124,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
     setCapturedImage(dataUrl);
 
     if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+      stream?.getTracks?.()?.forEach((track) => track.stop());
       setStream(null);
     }
   };
@@ -144,7 +144,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
       if (result) {
         setCapturedImage(result);
         if (stream) {
-          stream.getTracks().forEach((t) => t.stop());
+          stream?.getTracks?.()?.forEach((t) => t.stop());
           setStream(null);
         }
       }
@@ -161,7 +161,7 @@ export const CameraCaptureModal: React.FC<CameraCaptureModalProps> = ({
 
   const handleClose = () => {
     if (stream) {
-      stream.getTracks().forEach((track) => track.stop());
+      stream?.getTracks?.()?.forEach((track) => track.stop());
       setStream(null);
     }
     setCapturedImage(null);
